@@ -4,6 +4,8 @@ import cloudinary
 import cloudinary.uploader
 from dotenv import load_dotenv
 import os
+import threading
+import time
 from flask_cors import CORS
 
 # Cargar variables de entorno desde el archivo .env
@@ -28,6 +30,19 @@ cloudinary.config(
     api_key=os.getenv('CLOUDINARY_API_KEY'),
     api_secret=os.getenv('CLOUDINARY_API_SECRET')
 )
+
+def keep_alive():
+    while True:
+        try:
+            # Ejecutar una consulta simple para mantener la conexión activa
+            db_cursor.execute('SELECT 1')
+            db_connection.commit()  # Asegúrate de que se confirme la sesión
+        except mysql.connector.Error as e:
+            print("Error al mantener la conexión:", e)
+        time.sleep(60)  # Espera 60 segundos antes de la siguiente consulta
+
+# Iniciar el hilo de keep-alive al iniciar la aplicación
+threading.Thread(target=keep_alive, daemon=True).start()
 
 # Ruta para crear un nuevo reporte
 @app.route('/report', methods=['POST'])
