@@ -7,7 +7,7 @@ import os
 from flask_cors import CORS
 
 # Cargar variables de entorno desde el archivo .env
-load_dotenv(dotenv_path="/Juan Figueroa/Descargas 2/EcoAlert/ecoalert/lib/bd.env")
+#load_dotenv(dotenv_path="/Juan Figueroa/Descargas 2/EcoAlert/ecoalert/lib/bd.env")
 
 # Configurar Flask
 app = Flask(__name__)
@@ -111,4 +111,4 @@ def get_reports():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True)
