@@ -4,23 +4,25 @@ import cloudinary
 import cloudinary.uploader
 from dotenv import load_dotenv
 import os
+import threading
+import time
 from flask_cors import CORS
 
 # Cargar variables de entorno desde el archivo .env
-#load_dotenv(dotenv_path="/Juan Figueroa/Descargas 2/EcoAlert/ecoalert/lib/bd.env")
+# load_dotenv(dotenv_path="/Juan Figueroa/Descargas 2/EcoAlert/ecoalert/lib/bd.env")
 
 # Configurar Flask
 app = Flask(__name__)
 CORS(app, resources={r"/report": {"origins": "*"}})  # Habilitar CORS para cualquier origen
 
-# Configurar conexión a MySQL
-db_connection = mysql.connector.connect(
-    host=os.getenv('MYSQL_HOST'),
-    user=os.getenv('MYSQL_USER'),
-    password=os.getenv('MYSQL_PASSWORD'),
-    database=os.getenv('MYSQL_DB')
-)
-db_cursor = db_connection.cursor(dictionary=True)
+# Función para crear una nueva conexión a MySQL
+def get_db_connection():
+    return mysql.connector.connect(
+        host=os.getenv('MYSQL_HOST'),
+        user=os.getenv('MYSQL_USER'),
+        password=os.getenv('MYSQL_PASSWORD'),
+        database=os.getenv('MYSQL_DB')
+    )
 
 # Configurar Cloudinary
 cloudinary.config(
@@ -28,6 +30,24 @@ cloudinary.config(
     api_key=os.getenv('CLOUDINARY_API_KEY'),
     api_secret=os.getenv('CLOUDINARY_API_SECRET')
 )
+
+# Función para mantener viva la conexión a la base de datos
+def keep_alive():
+    while True:
+        try:
+            db_connection = get_db_connection()
+            cursor = db_connection.cursor()
+            # Ejecutar una consulta simple para mantener la conexión activa
+            cursor.execute('SELECT 1')
+            db_connection.commit()  # Asegúrate de que se confirme la sesión
+            cursor.close()
+            db_connection.close()
+        except mysql.connector.Error as e:
+            print("Error al mantener la conexión:", e)
+        time.sleep(60)  # Espera 60 segundos antes de la siguiente consulta
+
+# Iniciar el hilo de keep-alive al iniciar la aplicación
+threading.Thread(target=keep_alive, daemon=True).start()
 
 # Ruta para crear un nuevo reporte
 @app.route('/report', methods=['POST'])
@@ -71,6 +91,9 @@ def create_report():
             return jsonify({'error': f'Error al subir la imagen a Cloudinary: {e}'}), 500
 
         # Insertar los datos en MySQL
+        db_connection = get_db_connection()
+        db_cursor = db_connection.cursor()
+
         sql = """
             INSERT INTO dbecoalert_sql (description, full_address, localidad, barrio, correo_electronico, image_url, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -93,6 +116,8 @@ def create_report():
             'created_at': upload_result['created_at']
         }
 
+        db_cursor.close()
+        db_connection.close()  # Cerrar la conexión después de usarla
         return jsonify({'message': 'Reporte creado correctamente', 'report': report}), 201
 
     except Exception as e:
@@ -102,10 +127,15 @@ def create_report():
 @app.route('/reports', methods=['GET'])
 def get_reports():
     try:
+        db_connection = get_db_connection()
+        db_cursor = db_connection.cursor()
+
         sql = "SELECT id, description, image_url, created_at, full_address, localidad, barrio, correo_electronico FROM dbecoalert_sql"
         db_cursor.execute(sql)
         reports = db_cursor.fetchall()
         
+        db_cursor.close()
+        db_connection.close()  # Cerrar la conexión después de usarla
         return jsonify(reports), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
