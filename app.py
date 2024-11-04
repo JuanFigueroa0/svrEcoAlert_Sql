@@ -37,14 +37,13 @@ def keep_alive():
         try:
             db_connection = get_db_connection()
             cursor = db_connection.cursor()
-            # Ejecutar una consulta simple para mantener la conexión activa
             cursor.execute('SELECT 1')
-            db_connection.commit()  # Asegúrate de que se confirme la sesión
+            db_connection.commit()
             cursor.close()
             db_connection.close()
         except mysql.connector.Error as e:
             print("Error al mantener la conexión:", e)
-        time.sleep(60)  # Espera 60 segundos antes de la siguiente consulta
+        time.sleep(60)
 
 # Iniciar el hilo de keep-alive al iniciar la aplicación
 threading.Thread(target=keep_alive, daemon=True).start()
@@ -53,57 +52,45 @@ threading.Thread(target=keep_alive, daemon=True).start()
 @app.route('/report', methods=['POST'])
 def create_report():
     try:
-        # Mostrar logs para ver qué se está recibiendo desde el cliente
-        print("Datos recibidos:", request.form)
-        print("Archivos recibidos:", request.files)
-
-        # Obtener la descripción desde el formulario
+        # Obtener datos del formulario
         description = request.form.get('description')
-        if not description:
-            return jsonify({'error': 'La descripción es requerida'}), 400
-
-        # Obtener los datos de la dirección desde el formulario
-        address = request.form.get('address')  # Dirección completa enviada por el frontend
-        if not address:
-            return jsonify({'error': 'La dirección es requerida'}), 400
-
-        # Obtener la localidad, barrio y correo electrónico
+        address = request.form.get('address')
         localidad = request.form.get('localidad')
         barrio = request.form.get('barrio')
         correo_electronico = request.form.get('correoElectronico')
 
-        # Validar los nuevos campos
+        # Validación
+        if not description:
+            return jsonify({'error': 'La descripción es requerida'}), 400
+        if not address:
+            return jsonify({'error': 'La dirección es requerida'}), 400
         if not localidad:
             return jsonify({'error': 'La localidad es requerida'}), 400
         if not barrio:
             return jsonify({'error': 'El barrio es requerido'}), 400
         if not correo_electronico:
             return jsonify({'error': 'El correo electrónico es requerido'}), 400
-
-        # Subir la imagen a Cloudinary
         if 'image' not in request.files:
             return jsonify({'error': 'Imagen es requerida'}), 400
 
         image_file = request.files['image']
-        try:
-            upload_result = cloudinary.uploader.upload(image_file)
-        except Exception as e:
-            return jsonify({'error': f'Error al subir la imagen a Cloudinary: {e}'}), 500
+        upload_result = cloudinary.uploader.upload(image_file)
 
-        # Insertar los datos en MySQL
+        # Insertar datos en MySQL, con state como True por defecto
         db_connection = get_db_connection()
         db_cursor = db_connection.cursor()
-
+        
         sql = """
-            INSERT INTO dbecoalert_sql (description, full_address, localidad, barrio, correo_electronico, image_url, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO dbecoalert_sql (description, full_address, localidad, barrio, correo_electronico, image_url, created_at, state)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
         """
-        values = (description, address, localidad, barrio, correo_electronico, upload_result['secure_url'], upload_result['created_at'])
-
+        values = (description, address, localidad, barrio, correo_electronico, upload_result['secure_url'], True)
         db_cursor.execute(sql, values)
         db_connection.commit()
-        
-        report_id = db_cursor.lastrowid  # Obtener el ID generado automáticamente
+
+        report_id = db_cursor.lastrowid
+        db_cursor.close()
+        db_connection.close()
 
         report = {
             'id': report_id,
@@ -112,12 +99,10 @@ def create_report():
             'localidad': localidad,
             'barrio': barrio,
             'correo_electronico': correo_electronico,
+            'state': True,
             'image_url': upload_result['secure_url'],
             'created_at': upload_result['created_at']
         }
-
-        db_cursor.close()
-        db_connection.close()  # Cerrar la conexión después de usarla
         return jsonify({'message': 'Reporte creado correctamente', 'report': report}), 201
 
     except Exception as e:
@@ -135,8 +120,62 @@ def get_reports():
         reports = db_cursor.fetchall()
         
         db_cursor.close()
-        db_connection.close()  # Cerrar la conexión después de usarla
+        db_connection.close()
         return jsonify(reports), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Ruta para alternar el estado de un reporte
+@app.route('/report/<int:report_id>/toggle_state', methods=['PUT'])
+def toggle_report_state(report_id):
+    try:
+        db_connection = get_db_connection()
+        cursor = db_connection.cursor()
+        cursor.execute("SELECT * FROM dbecoalert_sql WHERE id = %s", (report_id,))
+        report = cursor.fetchone()
+        if not report:
+            return jsonify({'error': 'Reporte no encontrado'}), 404
+        
+        new_state = not report[5]  # Cambiar entre True y False (suponiendo que el índice 5 es 'state')
+        cursor.execute("UPDATE dbecoalert_sql SET state = %s WHERE id = %s", (new_state, report_id))
+        db_connection.commit()
+
+        return jsonify({'message': 'Estado del reporte actualizado'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Ruta para eliminar un reporte
+@app.route('/report/<int:report_id>', methods=['DELETE'])
+def delete_report(report_id):
+    try:
+        db_connection = get_db_connection()
+        cursor = db_connection.cursor()
+        
+        # Comprobar si el reporte existe
+        sql = "SELECT * FROM dbecoalert_sql WHERE id = %s"
+        cursor.execute(sql, (report_id,))
+        report = cursor.fetchone()
+
+        if report is None:
+            return jsonify({'error': 'Reporte no encontrado'}), 404
+
+        # Eliminar la imagen de Cloudinary (opcional)
+        image_url = report[6]  # Suponiendo que el índice 6 es 'image_url'
+        if image_url:
+            public_id = image_url.split('/')[-1].split('.')[0]
+            try:
+                cloudinary.uploader.destroy(public_id)
+            except Exception as e:
+                print(f"Error al eliminar la imagen de Cloudinary: {e}")
+
+        # Eliminar el reporte de la base de datos
+        delete_sql = "DELETE FROM dbecoalert_sql WHERE id = %s"
+        cursor.execute(delete_sql, (report_id,))
+        db_connection.commit()
+
+        return jsonify({'message': 'Reporte eliminado correctamente'}), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
