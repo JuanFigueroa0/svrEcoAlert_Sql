@@ -32,21 +32,21 @@ cloudinary.config(
 )
 
 # Función para mantener viva la conexión a la base de datos
-def keep_alive():
-    while True:
-        try:
-            db_connection = get_db_connection()
-            cursor = db_connection.cursor()
-            cursor.execute('SELECT 1')
-            db_connection.commit()
-            cursor.close()
-            db_connection.close()
-        except mysql.connector.Error as e:
-            print("Error al mantener la conexión:", e)
-        time.sleep(60)
+#def keep_alive():
+#    while True:
+#        try:
+#            db_connection = get_db_connection()
+#           cursor = db_connection.cursor()
+#            cursor.execute('SELECT 1')
+#            db_connection.commit()
+#            cursor.close()
+#            db_connection.close()
+#        except mysql.connector.Error as e:
+#            print("Error al mantener la conexión:", e)
+#        time.sleep(60)
 
 # Iniciar el hilo de keep-alive al iniciar la aplicación
-threading.Thread(target=keep_alive, daemon=True).start()
+#threading.Thread(target=keep_alive, daemon=True).start()
 
 # Ruta para crear un nuevo reporte
 @app.route('/report', methods=['POST'])
