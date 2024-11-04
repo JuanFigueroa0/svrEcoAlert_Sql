@@ -13,7 +13,7 @@ from flask_cors import CORS
 
 # Configurar Flask
 app = Flask(__name__)
-CORS(app, resources={r"/report": {"origins": "*"}})  # Habilitar CORS para cualquier origen
+CORS(app)  # Habilitar CORS para cualquier origen
 
 # Función para crear una nueva conexión a MySQL
 def get_db_connection():
