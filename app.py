@@ -4,12 +4,10 @@ import cloudinary
 import cloudinary.uploader
 from dotenv import load_dotenv
 import os
-import threading
-import time
 from flask_cors import CORS
 
 # Cargar variables de entorno desde el archivo .env
-# load_dotenv(dotenv_path="/Juan Figueroa/Descargas 2/EcoAlert/ecoalert/lib/bd.env")
+# load_dotenv(dotenv_path="/ruta/a/tu/archivo/.env")
 
 # Configurar Flask
 app = Flask(__name__)
@@ -30,23 +28,6 @@ cloudinary.config(
     api_key=os.getenv('CLOUDINARY_API_KEY'),
     api_secret=os.getenv('CLOUDINARY_API_SECRET')
 )
-
-# Función para mantener viva la conexión a la base de datos
-#def keep_alive():
-#    while True:
-#        try:
-#            db_connection = get_db_connection()
-#           cursor = db_connection.cursor()
-#            cursor.execute('SELECT 1')
-#            db_connection.commit()
-#            cursor.close()
-#            db_connection.close()
-#        except mysql.connector.Error as e:
-#            print("Error al mantener la conexión:", e)
-#        time.sleep(60)
-
-# Iniciar el hilo de keep-alive al iniciar la aplicación
-#threading.Thread(target=keep_alive, daemon=True).start()
 
 # Ruta para crear un nuevo reporte
 @app.route('/report', methods=['POST'])
@@ -82,7 +63,7 @@ def create_report():
         
         sql = """
             INSERT INTO dbecoalert_sql (description, full_address, localidad, barrio, correo_electronico, image_url, created_at, state)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, NOW(), %s)
         """
         values = (description, address, localidad, barrio, correo_electronico, upload_result['secure_url'], True)
         db_cursor.execute(sql, values)
@@ -99,9 +80,9 @@ def create_report():
             'localidad': localidad,
             'barrio': barrio,
             'correo_electronico': correo_electronico,
-            'state': True,
             'image_url': upload_result['secure_url'],
-            'created_at': upload_result['created_at']
+            'created_at': upload_result['created_at'],
+            'state': True
         }
         return jsonify({'message': 'Reporte creado correctamente', 'report': report}), 201
 
@@ -115,13 +96,27 @@ def get_reports():
         db_connection = get_db_connection()
         db_cursor = db_connection.cursor()
 
-        sql = "SELECT id, description, image_url, created_at, full_address, localidad, barrio, correo_electronico FROM dbecoalert_sql"
+        sql = "SELECT id, description, full_address, localidad,  barrio,  correo_electronico, image_url, created_at, state FROM dbecoalert_sql"
         db_cursor.execute(sql)
         reports = db_cursor.fetchall()
         
+        results = []
+        for report in reports:
+            results.append({
+                'id': report[0],
+                'description': report[1],
+                'full_address': report[2],
+                'localidad': report[3],
+                'barrio': report[4],
+                'correo_electronico': report[5],
+                'image_url': report[6],
+                'created_at': report[7],
+                'state': report[8]
+            })
+        
         db_cursor.close()
         db_connection.close()
-        return jsonify(reports), 200
+        return jsonify(results), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -136,7 +131,7 @@ def toggle_report_state(report_id):
         if not report:
             return jsonify({'error': 'Reporte no encontrado'}), 404
         
-        new_state = not report[5]  # Cambiar entre True y False (suponiendo que el índice 5 es 'state')
+        new_state = not report[8]  # Cambiar entre True y False (suponiendo que el índice 8 es 'state')
         cursor.execute("UPDATE dbecoalert_sql SET state = %s WHERE id = %s", (new_state, report_id))
         db_connection.commit()
 
