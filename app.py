@@ -42,7 +42,7 @@ cloudinary.config(
 )
 
 # Función para enviar un correo de confirmación
-def send_confirmation_email(correo_electronico, report_id):
+def send_confirmation_email(correo_electronico, report_id, created_at):
     try:
         msg = Message('Confirmación de Creación de Reporte - EcoAlert',
                       recipients=[correo_electronico])
@@ -54,7 +54,7 @@ def send_confirmation_email(correo_electronico, report_id):
         A continuación, te proporcionamos los detalles del reporte:
 
         ID de Reporte: {report_id}
-        Fecha de Creación: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+        Fecha de Creación: {created_at.strftime('%d/%m/%Y %H:%M:%S')}
 
         Nuestro equipo comenzará a revisar tu reporte a la mayor brevedad posible. Te notificaremos cualquier actualización sobre el estado del mismo.
 
@@ -116,7 +116,7 @@ def create_report():
         db_connection.close()
 
         # Enviar correo de confirmación
-        send_confirmation_email(correo_electronico, report_id)
+        send_confirmation_email(correo_electronico, report_id, created_at)
 
         # Devolver respuesta con el reporte
         report = {
