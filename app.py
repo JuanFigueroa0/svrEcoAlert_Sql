@@ -40,6 +40,18 @@ cloudinary.config(
     api_secret=os.getenv('CLOUDINARY_API_SECRET')
 )
 
+@app.route('/temail', methods=['GET'])
+def send_test_email():
+    try:
+        msg = Message('Test Email', recipients=['juanfigroa29@gmail.com'])
+        msg.body = "Este es un correo de prueba."
+        mail.send(msg)
+        return jsonify({'message': 'Correo de prueba enviado exitosamente.'}), 200
+    except Exception as e:
+        return jsonify({'error': f'Error al enviar el correo: {str(e)}'}), 500
+
+
+
 # Función para enviar un correo de confirmación
 def send_confirmation_email(correo_electronico, report_id):
     try:
