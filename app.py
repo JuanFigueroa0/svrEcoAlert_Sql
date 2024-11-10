@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import os
 from flask_cors import CORS
 from flask_mail import Mail, Message
+from datetime import datetime
 
 # Cargar variables de entorno desde el archivo .env
 # load_dotenv(dotenv_path="/ruta/a/tu/archivo/.env")
@@ -43,9 +44,27 @@ cloudinary.config(
 # Función para enviar un correo de confirmación
 def send_confirmation_email(correo_electronico, report_id):
     try:
-        msg = Message('Reporte Creado Exitosamente',
+        msg = Message('Confirmación de Creación de Reporte - EcoAlert',
                       recipients=[correo_electronico])
-        msg.body = f"El reporte ha sido creado correctamente. Tu ID de reporte es: {report_id}."
+        msg.body = f"""
+        Estimado/a usuario/a,
+
+        Gracias por utilizar EcoAlert. Nos complace informarte que tu reporte ha sido creado exitosamente en nuestro sistema.
+
+        A continuación, te proporcionamos los detalles del reporte:
+
+        ID de Reporte: {report_id}
+        Fecha de Creación: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+
+        Nuestro equipo comenzará a revisar tu reporte a la mayor brevedad posible. Te notificaremos cualquier actualización sobre el estado del mismo.
+
+        Si tienes alguna pregunta o necesitas más información, no dudes en ponerte en contacto con nosotros.
+
+        Atentamente,
+        El equipo de EcoAlert
+
+        Este es un mensaje automático, por favor no respondas a este correo.
+        """
         
         mail.send(msg)
     except Exception as e:
