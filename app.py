@@ -70,6 +70,35 @@ def send_confirmation_email(correo_electronico, report_id, created_at):
         print(f"Error al enviar el correo: {e}")
         return jsonify({'error': f'No se pudo enviar el correo: {str(e)}'}), 500
 
+
+def send_state_change_email(correo_electronico, report_id):
+    try:
+        msg = Message('Estado de tu Reporte - EcoAlert',
+                      recipients=[correo_electronico])
+        msg.body = f"""
+        Estimado/a usuario/a,
+
+        Nos complace informarte que el estado de tu reporte ha sido actualizado a 'Solucionado' en nuestro sistema.
+
+        A continuación, te proporcionamos los detalles del reporte:
+
+        ID de Reporte: {report_id}
+
+        Nuestro equipo ha concluido con la revisión de tu reporte y se considera Solucionado.
+
+        Si tienes alguna pregunta o necesitas más información, no dudes en ponerte en contacto con nosotros.
+
+        Atentamente,
+        El equipo de EcoAlert
+
+        Este es un mensaje automático, por favor no respondas a este correo.
+        """
+        
+        mail.send(msg)
+    except Exception as e:
+        print(f"Error al enviar el correo: {e}")
+        return jsonify({'error': f'No se pudo enviar el correo: {str(e)}'}), 500
+
 # Ruta para crear un nuevo reporte
 @app.route('/report', methods=['POST'])
 def create_report():
@@ -186,8 +215,7 @@ def toggle_report_state(report_id):
         # Si el nuevo estado es False, enviar un correo al usuario
         if new_state == False:
             correo_electronico = report[5]  # Suponiendo que el índice 5 es 'correo_electronico'
-            created_at = report[7]  # Suponiendo que el índice 7 es 'created_at'
-            send_confirmation_email(correo_electronico, report_id, created_at)
+            send_state_change_email(correo_electronico, report_id)
         
         cursor.execute("UPDATE dbecoalert_sql SET state = %s WHERE id = %s", (new_state, report_id))
         db_connection.commit()
