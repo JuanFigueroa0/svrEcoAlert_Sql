@@ -5,6 +5,7 @@ import cloudinary.uploader
 from dotenv import load_dotenv
 import os
 from flask_cors import CORS
+from flask_mail import Mail, Message
 
 # Cargar variables de entorno desde el archivo .env
 # load_dotenv(dotenv_path="/ruta/a/tu/archivo/.env")
@@ -12,6 +13,16 @@ from flask_cors import CORS
 # Configurar Flask
 app = Flask(__name__)
 CORS(app)  # Habilitar CORS para cualquier origen
+
+# Configuración de Flask-Mail
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'  # Usando Gmail, pero puedes cambiar esto si usas otro proveedor
+app.config['MAIL_PORT'] = 465  # Puerto SSL
+app.config['MAIL_USE_SSL'] = True
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')  # Tu correo electrónico
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')  # Tu contraseña de correo
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')  # El remitente por defecto
+
+mail = Mail(app)
 
 # Función para crear una nueva conexión a MySQL
 def get_db_connection():
@@ -28,6 +39,19 @@ cloudinary.config(
     api_key=os.getenv('CLOUDINARY_API_KEY'),
     api_secret=os.getenv('CLOUDINARY_API_SECRET')
 )
+
+# Función para enviar un correo de confirmación
+def send_confirmation_email(correo_electronico, report_id):
+    try:
+        # Crear el mensaje de correo
+        msg = Message('Reporte Creado Exitosamente',
+                      recipients=[correo_electronico])
+        msg.body = f"El reporte ha sido creado correctamente. Tu ID de reporte es: {report_id}."
+        
+        # Enviar el correo
+        mail.send(msg)
+    except Exception as e:
+        print(f"Error al enviar el correo: {e}")
 
 # Ruta para crear un nuevo reporte
 @app.route('/report', methods=['POST'])
@@ -73,6 +97,10 @@ def create_report():
         db_cursor.close()
         db_connection.close()
 
+        # Enviar correo de confirmación
+        send_confirmation_email(correo_electronico, report_id)
+
+        # Devolver respuesta con el reporte
         report = {
             'id': report_id,
             'description': description,
