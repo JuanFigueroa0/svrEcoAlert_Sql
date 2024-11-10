@@ -6,10 +6,9 @@ from dotenv import load_dotenv
 import os
 from flask_cors import CORS
 from flask_mail import Mail, Message
-from datetime import datetime
 
 # Cargar variables de entorno desde el archivo .env
-# load_dotenv(dotenv_path="/ruta/a/tu/archivo/.env")
+#load_dotenv()
 
 # Configurar Flask
 app = Flask(__name__)
@@ -71,34 +70,6 @@ def send_confirmation_email(correo_electronico, report_id, created_at):
         print(f"Error al enviar el correo: {e}")
         return jsonify({'error': f'No se pudo enviar el correo: {str(e)}'}), 500
 
-def send_state_change_email(correo_electronico, report_id):
-    try:
-        msg = Message('Estado de tu Reporte - EcoAlert',
-                      recipients=[correo_electronico])
-        msg.body = f"""
-        Estimado/a usuario/a,
-
-        Nos complace informarte que el estado de tu reporte ha sido actualizado a 'Solucionado' en nuestro sistema.
-
-        A continuación, te proporcionamos los detalles del reporte:
-
-        ID de Reporte: {report_id}
-
-        Nuestro equipo ha concluido con la revisión de tu reporte y se considera Solucionado.
-
-        Si tienes alguna pregunta o necesitas más información, no dudes en ponerte en contacto con nosotros.
-
-        Atentamente,
-        El equipo de EcoAlert
-
-        Este es un mensaje automático, por favor no respondas a este correo.
-        """
-        
-        mail.send(msg)
-    except Exception as e:
-        print(f"Error al enviar el correo: {e}")
-        return jsonify({'error': f'No se pudo enviar el correo: {str(e)}'}), 500
-
 # Ruta para crear un nuevo reporte
 @app.route('/report', methods=['POST'])
 def create_report():
@@ -140,6 +111,11 @@ def create_report():
         db_connection.commit()
 
         report_id = db_cursor.lastrowid
+        
+        # Obtener el valor de 'created_at' desde la base de datos
+        db_cursor.execute("SELECT created_at FROM dbecoalert_sql WHERE id = %s", (report_id,))
+        created_at = db_cursor.fetchone()[0]
+        
         db_cursor.close()
         db_connection.close()
 
@@ -155,7 +131,7 @@ def create_report():
             'barrio': barrio,
             'correo_electronico': correo_electronico,
             'image_url': upload_result['secure_url'],
-            'created_at': upload_result['created_at'],
+            'created_at': created_at,
             'state': True
         }
         return jsonify({'message': 'Reporte creado correctamente', 'report': report}), 201
@@ -170,7 +146,7 @@ def get_reports():
         db_connection = get_db_connection()
         db_cursor = db_connection.cursor()
 
-        sql = "SELECT id, description, full_address, localidad,  barrio,  correo_electronico, image_url, created_at, state FROM dbecoalert_sql"
+        sql = "SELECT id, description, full_address, localidad, barrio, correo_electronico, image_url, created_at, state FROM dbecoalert_sql"
         db_cursor.execute(sql)
         reports = db_cursor.fetchall()
         
@@ -205,17 +181,16 @@ def toggle_report_state(report_id):
         if not report:
             return jsonify({'error': 'Reporte no encontrado'}), 404
         
-        current_state = report[8]  # Suponiendo que el índice 8 es 'state'
-        new_state = False if current_state else True  # Cambiar de True (activo) a False (resuelto) o viceversa
-
-        # Actualizar el estado solo si es diferente al actual
-        cursor.execute("UPDATE dbecoalert_sql SET state = %s WHERE id = %s", (new_state, report_id))
-        db_connection.commit()
-
-        # Si el estado cambia a False (Resuelto), enviar el correo
+        new_state = not report[8]  # Cambiar entre True y False (suponiendo que el índice 8 es 'state')
+        
+        # Si el nuevo estado es False, enviar un correo al usuario
         if new_state == False:
             correo_electronico = report[5]  # Suponiendo que el índice 5 es 'correo_electronico'
-            send_state_change_email(correo_electronico, report_id)
+            created_at = report[7]  # Suponiendo que el índice 7 es 'created_at'
+            send_confirmation_email(correo_electronico, report_id, created_at)
+        
+        cursor.execute("UPDATE dbecoalert_sql SET state = %s WHERE id = %s", (new_state, report_id))
+        db_connection.commit()
 
         return jsonify({'message': 'Estado del reporte actualizado'}), 200
 
