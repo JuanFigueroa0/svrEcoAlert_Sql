@@ -258,6 +258,40 @@ def delete_report(report_id):
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+        
+# Nueva ruta para verificar usuario y contraseña
+@app.route('/verificar', methods=['POST'])
+def verificar_usuario():
+    try:
+        # Obtener datos enviados desde el cliente
+        datos = request.json
+        usuario = datos.get("usuario")
+        contrasena = datos.get("contrasena")
+
+        # Validación inicial de datos
+        if not usuario or not contrasena:
+            return jsonify({"error": "Usuario y contraseña son requeridos"}), 400
+
+        # Conexión a la base de datos
+        db_connection = get_db_connection()
+        cursor = db_connection.cursor()
+
+        # Consulta segura para verificar el usuario
+        consulta = "SELECT * FROM usuarios WHERE usuario = %s AND contrasena = %s"
+        cursor.execute(consulta, (usuario, contrasena))
+        resultado = cursor.fetchone()
+
+        # Cierre de cursor y conexión
+        cursor.close()
+        db_connection.close()
+
+        if resultado:
+            return jsonify({"mensaje": "Usuario autenticado"}), 200
+        else:
+            return jsonify({"mensaje": "Usuario o contraseña incorrectos"}), 401
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
