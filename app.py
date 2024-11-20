@@ -54,7 +54,6 @@ def token_required(f):
         return f(current_user, *args, **kwargs)
     return decorated
 
-# Ruta para verificar el token JWT
 @app.route('/verify-token', methods=['POST'])
 def verify_token():
     try:
@@ -67,20 +66,29 @@ def verify_token():
         except IndexError:
             return jsonify({"error": "Token mal formateado"}), 401
 
-        decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        
-        return jsonify({
-            "mensaje": "Token válido",
-            "usuario": decoded["usuario"]
-        }), 200
+        # Decodificar el token con manejo explícito de la expiración
+        try:
+            decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            
+            # Verificar expiración manualmente
+            exp_timestamp = decoded.get("exp")
+            if exp_timestamp:
+                now = datetime.utcnow().timestamp()
+                if now > exp_timestamp:
+                    return jsonify({"error": "Token expirado"}), 401
 
-    except jwt.ExpiredSignatureError:
-        return jsonify({"error": "Token expirado"}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Token inválido"}), 401
+            return jsonify({
+                "mensaje": "Token válido",
+                "usuario": decoded["usuario"]
+            }), 200
+
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expirado"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Token inválido"}), 401
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+        return jsonify({"error": f"Error al verificar token: {str(e)}"}), 500
 
 
 # Función para crear una nueva conexión a MySQL
@@ -323,6 +331,8 @@ def delete_report(report_id):
         return jsonify({'error': str(e)}), 500
         
 # Ruta para verificar usuario y generar JWT
+TOKEN_EXPIRATION_HOURS = 24
+
 @app.route('/verificar', methods=['POST'])
 def verificar_usuario():
     try:
@@ -344,12 +354,14 @@ def verificar_usuario():
         db_connection.close()
 
         if resultado:
+            # Crear el payload con tiempo de expiración más largo
             payload = {
                 "usuario": usuario,
-                "exp": datetime.utcnow() + timedelta(hours=1),
+                "exp": datetime.utcnow() + timedelta(hours=TOKEN_EXPIRATION_HOURS),
                 "iat": datetime.utcnow()
             }
 
+            # Generar token
             token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
             return jsonify({
