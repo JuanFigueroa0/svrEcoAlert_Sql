@@ -168,7 +168,6 @@ def send_state_change_email(correo_electronico, report_id):
 
 # Ruta para crear un nuevo reporte
 @app.route('/report', methods=['POST'])
-@token_required
 def create_report():
     try:
         # Obtener datos del formulario
@@ -238,7 +237,6 @@ def create_report():
 
 # Ruta para obtener todos los reportes
 @app.route('/reports', methods=['GET'])
-@token_required
 def get_reports():
     try:
         db_connection = get_db_connection()
@@ -270,7 +268,6 @@ def get_reports():
 
 # Ruta para alternar el estado de un reporte
 @app.route('/report/<int:report_id>/toggle_state', methods=['PUT'])
-@token_required
 def toggle_report_state(report_id):
     try:
         db_connection = get_db_connection()
@@ -297,7 +294,6 @@ def toggle_report_state(report_id):
 
 # Ruta para eliminar un reporte
 @app.route('/report/<int:report_id>', methods=['DELETE'])
-@token_required
 def delete_report(report_id):
     try:
         db_connection = get_db_connection()
