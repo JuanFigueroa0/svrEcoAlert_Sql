@@ -6,9 +6,6 @@ from dotenv import load_dotenv
 import os
 from flask_cors import CORS
 from flask_mail import Mail, Message
-import jwt
-import datetime
-from functools import wraps
 
 # Cargar variables de entorno desde el archivo .env
 #load_dotenv()
@@ -26,35 +23,6 @@ app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')  # Tu contraseña de co
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')  # El remitente por defecto
 
 mail = Mail(app)
-# Clave secreta para firmar los tokens
-SECRET_KEY = os.getenv('SECRET_KEY', 'tu_clave_secreta_segura')
-
-# Decorador para proteger rutas con JWT
-def token_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization')
-        if not token:
-            return jsonify({'error': 'Token no encontrado, acceso denegado'}), 401
-        try:
-            jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Token expirado, inicia sesión de nuevo'}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({'error': 'Token inválido'}), 401
-        return f(*args, **kwargs)
-    return decorated
-    
-@app.route('/verify-token', methods=['POST'])
-def verify_token():
-    token = request.headers.get('Authorization', '').replace('Bearer ', '')
-    try:
-        decoded_token = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
-        return jsonify({"valid": True}), 200
-    except jwt.ExpiredSignatureError:
-        return jsonify({"error": "Token expirado"}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Token inválido"}), 401
 
 # Función para crear una nueva conexión a MySQL
 def get_db_connection():
@@ -291,6 +259,7 @@ def delete_report(report_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         
+# Nueva ruta para verificar usuario y contraseña
 @app.route('/verificar', methods=['POST'])
 def verificar_usuario():
     try:
@@ -317,17 +286,7 @@ def verificar_usuario():
         db_connection.close()
 
         if resultado:
-            # Generar el token JWT
-            token = jwt.encode(
-                {
-                    "usuario": usuario,
-                    "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)  # Expira en 1 hora
-                },
-                SECRET_KEY,
-                algorithm="HS256"
-            )
-
-            return jsonify({"mensaje": "Usuario autenticado", "token": token}), 200
+            return jsonify({"mensaje": "Usuario autenticado"}), 200
         else:
             return jsonify({"mensaje": "Usuario o contraseña incorrectos"}), 401
 
