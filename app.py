@@ -6,8 +6,6 @@ from dotenv import load_dotenv
 import os
 from flask_cors import CORS
 from flask_mail import Mail, Message
-import jwt
-from datetime import datetime, timedelta
 
 # Cargar variables de entorno desde el archivo .env
 #load_dotenv()
@@ -25,30 +23,6 @@ app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')  # Tu contraseña de co
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')  # El remitente por defecto
 
 mail = Mail(app)
-
-# Ruta para verificar el token JWT
-@app.route('/verify-token', methods=['POST'])
-def verify_token():
-    try:
-        # Obtener el token del encabezado Authorization
-        token = request.headers.get('Authorization').split(" ")[1]
-        if not token:
-            return jsonify({"error": "Token no proporcionado"}), 400
-
-        # Decodificar el JWT
-        decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-
-        # Si el token es válido, devolver el usuario
-        return jsonify({"usuario": decoded["usuario"]}), 200
-
-    except jwt.ExpiredSignatureError:
-        return jsonify({"error": "Token expirado"}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Token inválido"}), 401
-
-
-
-
 
 # Función para crear una nueva conexión a MySQL
 def get_db_connection():
@@ -285,42 +259,34 @@ def delete_report(report_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         
-# Ruta para verificar usuario y contraseña y generar JWT
+# Nueva ruta para verificar usuario y contraseña
 @app.route('/verificar', methods=['POST'])
 def verificar_usuario():
     try:
+        # Obtener datos enviados desde el cliente
         datos = request.json
         usuario = datos.get("usuario")
         contrasena = datos.get("contrasena")
 
+        # Validación inicial de datos
         if not usuario or not contrasena:
             return jsonify({"error": "Usuario y contraseña son requeridos"}), 400
 
-        # Conectar a la base de datos
+        # Conexión a la base de datos
         db_connection = get_db_connection()
         cursor = db_connection.cursor()
 
-        # Verificar si el usuario y la contraseña coinciden
+        # Consulta segura para verificar el usuario
         consulta = "SELECT * FROM usuarios WHERE usuario = %s AND contrasena = %s"
         cursor.execute(consulta, (usuario, contrasena))
         resultado = cursor.fetchone()
 
+        # Cierre de cursor y conexión
         cursor.close()
         db_connection.close()
 
-        # Si el usuario es válido, generar el JWT
         if resultado:
-            # Crear el payload del JWT
-            payload = {
-                "usuario": usuario,
-                "exp": datetime.utcnow() + timedelta(hours=1)  # Token válido por 1 hora
-            }
-
-            # Crear el token JWT
-            token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-
-            # Devolver el token al frontend
-            return jsonify({"mensaje": "Usuario autenticado", "token": token}), 200
+            return jsonify({"mensaje": "Usuario autenticado"}), 200
         else:
             return jsonify({"mensaje": "Usuario o contraseña incorrectos"}), 401
 
