@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 import os
 from flask_cors import CORS
 from flask_mail import Mail, Message
+import jwt
+from datetime import datetime, timedelta
+from functools import wraps
 
 # Cargar variables de entorno desde el archivo .env
 #load_dotenv()
@@ -23,6 +26,62 @@ app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')  # Tu contraseña de co
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')  # El remitente por defecto
 
 mail = Mail(app)
+
+SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'v$I~W8<P0~6e')
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        
+        if 'Authorization' in request.headers:
+            try:
+                token = request.headers['Authorization'].split(" ")[1]
+            except IndexError:
+                return jsonify({'error': 'Token mal formateado'}), 401
+
+        if not token:
+            return jsonify({'error': 'Token no proporcionado'}), 401
+
+        try:
+            data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            current_user = data['usuario']
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expirado'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Token inválido'}), 401
+
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+# Ruta para verificar el token JWT
+@app.route('/verify-token', methods=['POST'])
+def verify_token():
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({"error": "Token no proporcionado"}), 401
+
+        try:
+            token = auth_header.split(" ")[1]
+        except IndexError:
+            return jsonify({"error": "Token mal formateado"}), 401
+
+        decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        
+        return jsonify({
+            "mensaje": "Token válido",
+            "usuario": decoded["usuario"]
+        }), 200
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token expirado"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Token inválido"}), 401
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 
 # Función para crear una nueva conexión a MySQL
 def get_db_connection():
@@ -101,6 +160,7 @@ def send_state_change_email(correo_electronico, report_id):
 
 # Ruta para crear un nuevo reporte
 @app.route('/report', methods=['POST'])
+@token_required
 def create_report():
     try:
         # Obtener datos del formulario
@@ -170,6 +230,7 @@ def create_report():
 
 # Ruta para obtener todos los reportes
 @app.route('/reports', methods=['GET'])
+@token_required
 def get_reports():
     try:
         db_connection = get_db_connection()
@@ -201,6 +262,7 @@ def get_reports():
 
 # Ruta para alternar el estado de un reporte
 @app.route('/report/<int:report_id>/toggle_state', methods=['PUT'])
+@token_required
 def toggle_report_state(report_id):
     try:
         db_connection = get_db_connection()
@@ -227,6 +289,7 @@ def toggle_report_state(report_id):
 
 # Ruta para eliminar un reporte
 @app.route('/report/<int:report_id>', methods=['DELETE'])
+@token_required
 def delete_report(report_id):
     try:
         db_connection = get_db_connection()
@@ -259,36 +322,43 @@ def delete_report(report_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         
-# Nueva ruta para verificar usuario y contraseña
+# Ruta para verificar usuario y generar JWT
 @app.route('/verificar', methods=['POST'])
 def verificar_usuario():
     try:
-        # Obtener datos enviados desde el cliente
         datos = request.json
         usuario = datos.get("usuario")
         contrasena = datos.get("contrasena")
 
-        # Validación inicial de datos
         if not usuario or not contrasena:
             return jsonify({"error": "Usuario y contraseña son requeridos"}), 400
 
-        # Conexión a la base de datos
         db_connection = get_db_connection()
         cursor = db_connection.cursor()
 
-        # Consulta segura para verificar el usuario
         consulta = "SELECT * FROM usuarios WHERE usuario = %s AND contrasena = %s"
         cursor.execute(consulta, (usuario, contrasena))
         resultado = cursor.fetchone()
 
-        # Cierre de cursor y conexión
         cursor.close()
         db_connection.close()
 
         if resultado:
-            return jsonify({"mensaje": "Usuario autenticado"}), 200
+            payload = {
+                "usuario": usuario,
+                "exp": datetime.utcnow() + timedelta(hours=1),
+                "iat": datetime.utcnow()
+            }
+
+            token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+            return jsonify({
+                "mensaje": "Usuario autenticado",
+                "token": token,
+                "usuario": usuario
+            }), 200
         else:
-            return jsonify({"mensaje": "Usuario o contraseña incorrectos"}), 401
+            return jsonify({"error": "Usuario o contraseña incorrectos"}), 401
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
