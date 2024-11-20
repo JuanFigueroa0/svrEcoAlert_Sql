@@ -327,7 +327,7 @@ def delete_report(report_id):
         return jsonify({'error': str(e)}), 500
         
 # Ruta para verificar usuario y generar JWT
-TOKEN_EXPIRATION_HOURS = 24
+TOKEN_EXPIRATION_HOURS = 1
 
 @app.route('/verificar', methods=['POST'])
 def verificar_usuario():
